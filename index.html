@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Text Converter</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%234f6bed'/><text x='50' y='68' font-size='52' text-anchor='middle' fill='white' font-family='Arial' font-weight='bold'>Aa</text></svg>">
+<style>
+  :root {
+    --bg: #f4f5f8; --card: #ffffff; --text: #1b1d24; --muted: #6b7080;
+    --border: #dcdfe7; --accent: #4f6bed; --accent-text: #ffffff;
+    --btn: #eef0f5; --btn-hover: #e2e5ee; --ok: #1f9d55;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121318; --card: #1b1d24; --text: #e8e9ee; --muted: #9096a6;
+      --border: #2d303b; --accent: #6b84ff; --accent-text: #ffffff;
+      --btn: #262935; --btn-hover: #30344300; --ok: #3ccf7e;
+    }
+    :root { --btn-hover: #303443; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 28px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 16px; font-weight: 650; letter-spacing: -0.01em; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px;
+  }
+  textarea {
+    width: 100%; min-height: 320px; resize: vertical;
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; font-family: inherit; font-size: 17px; line-height: 1.6; outline: none;
+  }
+  textarea:focus { border-color: var(--accent); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  button {
+    font: inherit; font-size: 14px; border: 1px solid var(--border);
+    background: var(--btn); color: var(--text);
+    padding: 9px 14px; border-radius: 9px; cursor: pointer;
+  }
+  button:hover { background: var(--btn-hover); }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  .spacer { flex: 1; }
+  .label { color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .status { color: var(--muted); font-size: 13px; min-height: 20px; margin-top: 10px; }
+  .status.ok { color: var(--ok); }
+  label.opt { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
+  kbd { font-size: 12px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  @media (max-width: 600px) { textarea { min-height: 240px; } .spacer { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Text Converter</h1>
+  <div class="card">
+    <textarea id="text" placeholder="Paste your text here…" spellcheck="false" autofocus></textarea>
+
+    <div class="row">
+      <button id="paste" class="primary">Paste</button>
+      <button id="copy">Copy</button>
+      <button id="clear">Clear</button>
+      <button id="undo" title="Undo last conversion">Undo</button>
+      <span class="spacer"></span>
+      <label class="opt"><input type="checkbox" id="keepcaps" checked> Keep ALL-CAPS words (NASA)</label>
+      <label class="opt"><input type="checkbox" id="autocopy" checked> Auto-copy after converting</label>
+    </div>
+
+    <div class="row">
+      <span class="label">Convert to:</span>
+      <button class="primary" data-case="title" title="Ctrl+Shift+T">Title Case</button>
+      <button data-case="sentence">Sentence case</button>
+      <button data-case="upper">UPPERCASE</button>
+      <button data-case="lower">lowercase</button>
+      <button data-case="smart">Title (skip small words)</button>
+      <button data-case="toggle">tOGGLE cASE</button>
+    </div>
+
+    <div class="status" id="status"></div>
+  </div>
+  <p class="status">Tip: <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> pastes &amp; title-cases in one go. Everything runs in your browser — nothing is sent anywhere.</p>
+</main>
+
+<script>
+const box = document.getElementById('text');
+const statusEl = document.getElementById('status');
+const autocopy = document.getElementById('autocopy');
+let history = [];
+
+// --- conversions -------------------------------------------------------
+const isLetter = c => /\p{L}/u.test(c);
+
+// Capitalise first letter of a word, lowercase the rest.
+// Words already in ALL CAPS (like NASA, USA) are kept, unless the whole text was shouting.
+function capWord(word, keepAcronyms) {
+  const letters = word.replace(/[^\p{L}]/gu, '');
+  if (keepAcronyms && letters.length > 1 && letters === letters.toUpperCase() && letters !== letters.toLowerCase()) return word;
+  let done = false, out = '';
+  for (const ch of word) {
+    if (!done && isLetter(ch)) { out += ch.toUpperCase(); done = true; }
+    else out += ch.toLowerCase();
+  }
+  return out;
+}
+
+// Handle hyphenated / slashed words: "well-known" -> "Well-Known"
+const capToken = (tok, keep) => tok.split(/([-–—\/])/).map(p => /^[-–—\/]$/.test(p) ? p : capWord(p, keep)).join('');
+
+function allCaps(t) { if (!document.getElementById('keepcaps').checked) return true; const l = t.replace(/[^\p{L}]/gu, ''); return l.length > 0 && l === l.toUpperCase() && l !== l.toLowerCase(); }
+
+function titleCase(t) {
+  const keep = !allCaps(t);
+  return t.replace(/\S+/g, tok => capToken(tok, keep));
+}
+
+const SMALL = new Set('a an and as at but by for from in into nor of off on onto or over per so the to up via vs with yet'.split(' '));
+function smartTitle(t) {
+  const keep = !allCaps(t);
+  return t.split('\n').map(line => {
+    const toks = line.split(/(\s+)/);
+    const words = toks.map((tok, i) => i % 2 ? null : tok).filter(w => w);
+    let wi = 0;
+    return toks.map((tok, i) => {
+      if (i % 2 || !tok) return tok;
+      const first = wi === 0, last = wi === words.length - 1; wi++;
+      const bare = tok.toLowerCase().replace(/[^\p{L}]/gu, '');
+      const afterColon = i >= 2 && /[:.!?]$/.test(toks[i - 2]);
+      if (!first && !last && !afterColon && SMALL.has(bare)) return tok.toLowerCase();
+      return capToken(tok, keep);
+    }).join('');
+  }).join('\n');
+}
+
+function sentenceCase(t) {
+  let s = t.toLowerCase();
+  s = s.replace(/(^\s*|[.!?]["'”’)\]]*\s+|\n\s*)(["'“‘(\[]*)(\p{L})/gu, (m, a, b, c) => a + b + c.toUpperCase());
+  s = s.replace(/\bi\b(?=['’]|\s|[.,!?;:]|$)/g, 'I');
+  return s;
+}
+
+const toggle = t => [...t].map(c => c === c.toUpperCase() ? c.toLowerCase() : c.toUpperCase()).join('');
+
+const CONVERT = {
+  title: titleCase, smart: smartTitle, sentence: sentenceCase,
+  upper: t => t.toUpperCase(), lower: t => t.toLowerCase(), toggle,
+};
+
+// --- UI ----------------------------------------------------------------
+let statusTimer;
+function say(msg, ok) {
+  statusEl.textContent = msg; statusEl.className = 'status' + (ok ? ' ok' : '');
+  clearTimeout(statusTimer); statusTimer = setTimeout(() => statusEl.textContent = '', 2500);
+}
+
+async function copyText() {
+  if (!box.value) return say('Nothing to copy.');
+  try { await navigator.clipboard.writeText(box.value); }
+  catch { box.select(); document.execCommand('copy'); }
+  say('Copied to clipboard ✓', true);
+}
+
+function convert(kind) {
+  if (!box.value) return say('Paste some text first.');
+  history.push(box.value); if (history.length > 50) history.shift();
+  box.value = CONVERT[kind](box.value);
+  if (autocopy.checked) copyText(); else say('Converted ✓', true);
+}
+
+async function paste() {
+  try {
+    const t = await navigator.clipboard.readText();
+    if (!t) return say('Clipboard is empty.');
+    if (box.value) history.push(box.value);
+    box.value = t; say('Pasted ✓', true); return true;
+  } catch {
+    box.focus(); say('Browser blocked clipboard access — press Ctrl+V in the box instead.');
+    return false;
+  }
+}
+
+document.querySelectorAll('[data-case]').forEach(b => b.addEventListener('click', () => convert(b.dataset.case)));
+document.getElementById('paste').onclick = paste;
+document.getElementById('copy').onclick = copyText;
+document.getElementById('clear').onclick = () => { if (box.value) history.push(box.value); box.value = ''; box.focus(); };
+document.getElementById('undo').onclick = () => { if (history.length) { box.value = history.pop(); say('Undone', true); } else say('Nothing to undo.'); };
+
+// remember checkbox choices
+for (const id of ['autocopy', 'keepcaps']) {
+  const el = document.getElementById(id);
+  try { const v = localStorage.getItem(id); if (v !== null) el.checked = v === '1'; } catch {}
+  el.onchange = () => { try { localStorage.setItem(id, el.checked ? '1' : '0'); } catch {} };
+}
+
+document.addEventListener('keydown', async e => {
+  if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'v') { e.preventDefault(); if (await paste()) convert('title'); }
+  else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 't') { e.preventDefault(); convert('title'); }
+});
+</script>
+</body>
+</html>
