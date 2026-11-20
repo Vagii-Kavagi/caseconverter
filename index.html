@@ -38,6 +38,11 @@
     padding: 14px; font-family: inherit; font-size: 17px; line-height: 1.6; outline: none;
   }
   textarea:focus { border-color: var(--accent); }
+  .editor { display: flex; gap: 12px; align-items: stretch; }
+  .editor textarea { flex: 1; min-width: 0; }
+  .cases { display: flex; flex-direction: column; gap: 8px; width: 210px; flex-shrink: 0; order: -1; }
+  .cases button { text-align: left; padding: 11px 14px; }
+  .cases button.primary { font-size: 15px; padding: 14px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
   button {
     font: inherit; font-size: 14px; border: 1px solid var(--border);
@@ -53,14 +58,29 @@
   .status.ok { color: var(--ok); }
   label.opt { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 13px; cursor: pointer; }
   kbd { font-size: 12px; border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
-  @media (max-width: 600px) { textarea { min-height: 240px; } .spacer { display: none; } }
+  @media (max-width: 600px) {
+    textarea { min-height: 240px; } .spacer { display: none; }
+    .editor { flex-direction: column; }
+    .cases { width: auto; order: 0; display: grid; grid-template-columns: 1fr 1fr; }
+    .cases button.primary { grid-column: 1 / -1; }
+  }
 </style>
 </head>
 <body>
 <main>
   <h1>Text Converter</h1>
   <div class="card">
-    <textarea id="text" placeholder="Paste your text here…" spellcheck="false" autofocus></textarea>
+    <div class="editor">
+      <textarea id="text" placeholder="Paste your text here…" spellcheck="false" autofocus></textarea>
+      <div class="cases">
+        <button class="primary" data-case="title" title="Ctrl+Shift+T">Title Case</button>
+        <button data-case="sentence">Sentence case</button>
+        <button data-case="upper">UPPERCASE</button>
+        <button data-case="lower">lowercase</button>
+        <button data-case="smart">Title (skip small words)</button>
+        <button data-case="toggle">tOGGLE cASE</button>
+      </div>
+    </div>
 
     <div class="row">
       <button id="paste" class="primary">Paste</button>
@@ -70,16 +90,6 @@
       <span class="spacer"></span>
       <label class="opt"><input type="checkbox" id="keepcaps" checked> Keep ALL-CAPS words (NASA)</label>
       <label class="opt"><input type="checkbox" id="autocopy" checked> Auto-copy after converting</label>
-    </div>
-
-    <div class="row">
-      <span class="label">Convert to:</span>
-      <button class="primary" data-case="title" title="Ctrl+Shift+T">Title Case</button>
-      <button data-case="sentence">Sentence case</button>
-      <button data-case="upper">UPPERCASE</button>
-      <button data-case="lower">lowercase</button>
-      <button data-case="smart">Title (skip small words)</button>
-      <button data-case="toggle">tOGGLE cASE</button>
     </div>
 
     <div class="status" id="status"></div>
